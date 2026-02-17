@@ -2,15 +2,14 @@ import kaboom from "kaboom";
 
 type GameoverPayload = {
   score: number;
-  catches: number;
 };
 
 export function startGame(container: HTMLElement) {
   const GAME_WIDTH = 960;
   const GAME_HEIGHT = 540;
-  const CATCHER_SIZE = 44;
   const CAT_SIZE = 40;
-  const MOVE_SPEED = 300;
+  const CAT_PADDING = 26;
+  const CAT_TOP_PADDING = 164;
 
   const k = kaboom({
     global: false,
@@ -34,13 +33,16 @@ export function startGame(container: HTMLElement) {
     };
   };
 
-  const clampToScreen = (obj: { pos: { x: number; y: number } }, size: number) => {
-    obj.pos.x = Math.max(0, Math.min(GAME_WIDTH - size, obj.pos.x));
-    obj.pos.y = Math.max(0, Math.min(GAME_HEIGHT - size, obj.pos.y));
+  const clampToCatZone = (obj: { pos: { x: number; y: number } }) => {
+    obj.pos.x = Math.max(CAT_PADDING, Math.min(GAME_WIDTH - CAT_SIZE - CAT_PADDING, obj.pos.x));
+    obj.pos.y = Math.max(CAT_TOP_PADDING, Math.min(GAME_HEIGHT - CAT_SIZE - CAT_PADDING, obj.pos.y));
   };
 
   const randomCatPos = () =>
-    k.vec2(k.rand(80, GAME_WIDTH - CAT_SIZE - 80), k.rand(120, GAME_HEIGHT - CAT_SIZE - 30));
+    k.vec2(
+      k.rand(CAT_PADDING, GAME_WIDTH - CAT_SIZE - CAT_PADDING),
+      k.rand(CAT_TOP_PADDING, GAME_HEIGHT - CAT_SIZE - CAT_PADDING)
+    );
 
   const addButton = (label: string, centerX: number, centerY: number, w: number, h: number, onClick: () => void) => {
     const btn = k.add([
@@ -82,18 +84,24 @@ export function startGame(container: HTMLElement) {
   k.scene("play", () => {
     let timeLeft = 20;
     let score = 0;
-    let catches = 0;
     let ended = false;
+    let scorePopTime = 0;
+    let missMessageUntil = 0;
+    const timerBasePos = k.vec2(20, 18);
+    const scoreBasePos = k.vec2(20, 48);
+    const defaultMessage = "Mesaj: Kediye tikla ama yakalayamazsin.";
 
     const timerText = k.add([
       k.text(`Sure: ${timeLeft}`, { size: 24 }),
-      k.pos(20, 18),
+      k.pos(timerBasePos),
+      k.scale(1),
       k.color(255, 236, 149),
       k.fixed()
     ]);
     const scoreText = k.add([
       k.text("Skor: 0", { size: 24 }),
-      k.pos(20, 48),
+      k.pos(scoreBasePos),
+      k.scale(1),
       k.color(164, 250, 255),
       k.fixed()
     ]);
@@ -106,19 +114,12 @@ export function startGame(container: HTMLElement) {
       k.fixed()
     ]);
     const messageText = k.add([
-      k.text("Mesaj: Kedi cok utangac, hemen kaciyor.", { size: 18, width: 520 }),
+      k.text(defaultMessage, { size: 18, width: 520 }),
       k.pos(30, 102),
       k.color(232, 232, 245),
       k.fixed()
     ]);
 
-    const catcher = k.add([
-      k.rect(CATCHER_SIZE, CATCHER_SIZE, { radius: 8 }),
-      k.pos(100, GAME_HEIGHT / 2),
-      k.color(255, 145, 180),
-      k.area(),
-      "catcher"
-    ]);
     const cat = k.add([
       k.rect(CAT_SIZE, CAT_SIZE, { radius: 8 }),
       randomCatPos(),
@@ -127,99 +128,125 @@ export function startGame(container: HTMLElement) {
       "cat"
     ]);
 
-    let pointerActive = false;
-    let pointerTarget = catcher.pos.clone();
+    let dashActive = false;
+    let dashFrom = cat.pos.clone();
+    let dashTo = cat.pos.clone();
+    let dashProgress = 0;
+    let dashDuration = 0.14;
+    let catFloatSeed = k.rand(0, 1000);
 
-    const updatePointerTarget = (event: PointerEvent) => {
+    const toGameCoords = (event: PointerEvent) => {
       const rect = k.canvas.getBoundingClientRect();
       const scaleX = GAME_WIDTH / rect.width;
       const scaleY = GAME_HEIGHT / rect.height;
-      pointerTarget = k.vec2((event.clientX - rect.left) * scaleX, (event.clientY - rect.top) * scaleY);
+      return k.vec2((event.clientX - rect.left) * scaleX, (event.clientY - rect.top) * scaleY);
+    };
+
+    const runCatEscape = () => {
+      const elapsed = 20 - timeLeft;
+      dashDuration = Math.max(0.08, 0.2 - elapsed * 0.005);
+      dashFrom = cat.pos.clone();
+      dashTo = randomCatPos();
+      dashProgress = 0;
+      dashActive = true;
+
+      for (let i = 0; i < 5; i += 1) {
+        const t = i / 5;
+        k.add([
+          k.rect(10, 10, { radius: 2 }),
+          k.pos(dashFrom.x + (dashTo.x - dashFrom.x) * t, dashFrom.y + (dashTo.y - dashFrom.y) * t),
+          k.color(255, 200 - i * 20, 80 + i * 20),
+          k.opacity(0.6 - i * 0.1),
+          k.lifespan(0.16)
+        ]);
+      }
+    };
+
+    const handleMiss = () => {
+      messageText.text = "Mesaj: Iskala! Kedi sadece uzaktan bakti.";
+      missMessageUntil = k.time() + 1;
+    };
+
+    const handleHit = () => {
+      score += 1;
+      scoreText.text = `Skor: ${score}`;
+      scorePopTime = k.time() + 0.25;
+      messageText.text = "Mesaj: +1! Kedi utanc kacisina gecti.";
+      runCatEscape();
     };
 
     const onPointerDown = (event: PointerEvent) => {
       if (ended) return;
-      pointerActive = true;
-      updatePointerTarget(event);
-    };
-    const onPointerMove = (event: PointerEvent) => {
-      if (!pointerActive || ended) return;
-      updatePointerTarget(event);
-    };
-    const onPointerUp = () => {
-      pointerActive = false;
+      const point = toGameCoords(event);
+      const insideCat =
+        point.x >= cat.pos.x &&
+        point.x <= cat.pos.x + CAT_SIZE &&
+        point.y >= cat.pos.y &&
+        point.y <= cat.pos.y + CAT_SIZE;
+      if (insideCat) {
+        handleHit();
+      } else {
+        handleMiss();
+      }
     };
 
     k.canvas.addEventListener("pointerdown", onPointerDown);
-    k.canvas.addEventListener("pointermove", onPointerMove);
-    k.canvas.addEventListener("pointerup", onPointerUp);
-    k.canvas.addEventListener("pointercancel", onPointerUp);
-    k.canvas.addEventListener("pointerleave", onPointerUp);
 
     const removePointer = registerDisposer(() => {
       k.canvas.removeEventListener("pointerdown", onPointerDown);
-      k.canvas.removeEventListener("pointermove", onPointerMove);
-      k.canvas.removeEventListener("pointerup", onPointerUp);
-      k.canvas.removeEventListener("pointercancel", onPointerUp);
-      k.canvas.removeEventListener("pointerleave", onPointerUp);
     });
 
     const finishPlay = () => {
       if (ended) return;
       ended = true;
       removePointer();
-      k.go("gameover", { score, catches } satisfies GameoverPayload);
+      k.go("gameover", { score } satisfies GameoverPayload);
     };
 
-    catcher.onCollide("cat", () => {
-      if (ended) return;
-      catches += 1;
-      score += 100;
-      scoreText.text = `Skor: ${score}`;
-      messageText.text = "Mesaj: Neredeyse! Kedi yine izini kaybettirdi.";
-      cat.pos = randomCatPos();
-      k.shake(2);
-    });
-
-    k.onKeyDown("left", () => {
-      if (!ended) catcher.move(-MOVE_SPEED, 0);
-    });
-    k.onKeyDown("right", () => {
-      if (!ended) catcher.move(MOVE_SPEED, 0);
-    });
-    k.onKeyDown("up", () => {
-      if (!ended) catcher.move(0, -MOVE_SPEED);
-    });
-    k.onKeyDown("down", () => {
-      if (!ended) catcher.move(0, MOVE_SPEED);
-    });
-
-    const catWander = k.rand(0, 1000);
     k.onUpdate(() => {
       if (ended) return;
 
-      if (pointerActive) {
-        const toTarget = pointerTarget.sub(catcher.pos);
-        if (toTarget.len() > 3) {
-          catcher.move(toTarget.unit().scale(MOVE_SPEED));
+      const elapsed = 20 - timeLeft;
+      if (dashActive) {
+        dashProgress += k.dt() / dashDuration;
+        if (dashProgress >= 1) {
+          cat.pos = dashTo.clone();
+          dashActive = false;
+          catFloatSeed = k.rand(0, 1000);
+        } else {
+          const t = 1 - (1 - dashProgress) * (1 - dashProgress);
+          cat.pos.x = dashFrom.x + (dashTo.x - dashFrom.x) * t;
+          cat.pos.y = dashFrom.y + (dashTo.y - dashFrom.y) * t;
         }
-      }
-
-      const fleeDir = cat.pos.sub(catcher.pos);
-      const fleeSpeed = 175 + Math.sin(k.time() + catWander) * 30;
-      if (fleeDir.len() > 0.5) {
-        cat.move(fleeDir.unit().scale(fleeSpeed));
-      }
-      cat.move(Math.sin(k.time() * 2.4 + catWander) * 35, Math.cos(k.time() * 2.1 + catWander) * 35);
-
-      clampToScreen(catcher, CATCHER_SIZE);
-      clampToScreen(cat, CAT_SIZE);
-
-      const dist = Math.floor(catcher.pos.dist(cat.pos));
-      if (dist < 130) {
-        messageText.text = "Mesaj: Yaklastin! Hemen ustune git.";
       } else {
-        messageText.text = "Mesaj: Pati izlerini takip et.";
+        const wobbleFreq = 1.7 + elapsed * 0.06;
+        const wobbleAmp = 12 + elapsed * 0.8;
+        cat.pos.x += Math.sin(k.time() * wobbleFreq + catFloatSeed) * wobbleAmp * k.dt();
+        cat.pos.y += Math.cos(k.time() * (wobbleFreq + 0.5) + catFloatSeed) * wobbleAmp * k.dt();
+      }
+      clampToCatZone(cat);
+
+      if (k.time() < scorePopTime) {
+        scoreText.scale = k.vec2(1.18);
+      } else {
+        scoreText.scale = k.vec2(1);
+      }
+
+      if (timeLeft <= 5) {
+        const pulse = 1 + Math.abs(Math.sin(k.time() * 16)) * 0.22;
+        timerText.scale = k.vec2(pulse);
+        timerText.pos.x = timerBasePos.x + Math.sin(k.time() * 28) * 2;
+        timerText.pos.y = timerBasePos.y + Math.cos(k.time() * 24) * 2;
+      } else {
+        timerText.scale = k.vec2(1);
+        timerText.pos = timerBasePos.clone();
+      }
+
+      if (missMessageUntil > 0 && k.time() > missMessageUntil) {
+        missMessageUntil = 0;
+        if (!dashActive) {
+          messageText.text = defaultMessage;
+        }
       }
     });
 
@@ -233,7 +260,6 @@ export function startGame(container: HTMLElement) {
 
   k.scene("gameover", (payload?: GameoverPayload) => {
     const score = payload?.score ?? 0;
-    const catches = payload?.catches ?? 0;
 
     k.add([
       k.text("Kedi yine ka\u00e7t\u0131.", { size: 58 }),
@@ -249,7 +275,7 @@ export function startGame(container: HTMLElement) {
       k.opacity(0.92)
     ]);
     k.add([
-      k.text(`Skor Ozeti\nSkor: ${score}\nYakalama: ${catches}`, { size: 24, align: "center", width: 610 }),
+      k.text(`Skor Ozeti\nSkor: ${score}`, { size: 24, align: "center", width: 610 }),
       k.pos(GAME_WIDTH / 2, 205),
       k.anchor("top"),
       k.color(190, 245, 255)
