@@ -8,7 +8,7 @@ const pressStart = Press_Start_2P({
 });
 
 export const metadata: Metadata = {
-  title: "UTANGA\u00c7 KED\u0130 KA\u00c7IYOR 1999",
+  title: "UTANGA\u00c7 KED\u0130 KA\u00c7IYOR",
   description: "Kaboom.js ile yap\u0131lm\u0131\u015f mini HTML5 oyun projesi"
 };
 
