@@ -1,13 +1,17 @@
-import GameClient from "./GameClient";
+import dynamic from "next/dynamic";
 
 export const dynamic = "force-static";
+
+const GameClient = dynamic(() => import("./GameClient"), {
+  ssr: false
+});
 
 export default function GamePage() {
   return (
     <main className="gamePage">
       <div className="gameHeader">
-        <h1>Utangaç Kedi Kaçıyor</h1>
-        <p>Ok tuşlarıyla hareket et. Takipçiye yakalanma.</p>
+        <h1>Utangac Kedi Kaciyor</h1>
+        <p>Ok tuslariyla hareket et. Takipciye yakalanma.</p>
       </div>
       <GameClient />
     </main>
