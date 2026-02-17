@@ -4,6 +4,15 @@ type GameoverPayload = {
   score: number;
 };
 
+const messages = [
+  "Yakla\u015ft\u0131n ama utand\u0131.",
+  "G\u00f6z g\u00f6ze geldiniz. Ka\u00e7t\u0131.",
+  "G\u00fcl\u00fcmseyip uzakla\u015ft\u0131.",
+  "Yakalad\u0131\u011f\u0131n\u0131 sand\u0131n ama hay\u0131r.",
+  "Sessiz ama h\u0131zl\u0131.",
+  "Kedi seni izliyor."
+];
+
 export function startGame(container: HTMLElement) {
   const GAME_WIDTH = 960;
   const GAME_HEIGHT = 540;
@@ -86,10 +95,10 @@ export function startGame(container: HTMLElement) {
     let score = 0;
     let ended = false;
     let scorePopTime = 0;
-    let missMessageUntil = 0;
+    let messageUntil = 0;
     const timerBasePos = k.vec2(20, 18);
     const scoreBasePos = k.vec2(20, 48);
-    const defaultMessage = "Mesaj: Kediye tikla ama yakalayamazsin.";
+    const defaultMessage = "Kediye tikla. Her tikta utangac kacis yapar.";
 
     const timerText = k.add([
       k.text(`Sure: ${timeLeft}`, { size: 24 }),
@@ -107,15 +116,30 @@ export function startGame(container: HTMLElement) {
     ]);
 
     k.add([
-      k.rect(540, 66, { radius: 8 }),
+      k.rect(548, 74, { radius: 10 }),
       k.pos(20, 84),
-      k.color(11, 15, 28),
-      k.opacity(0.92),
+      k.color(77, 255, 240),
+      k.opacity(0.35),
+      k.fixed()
+    ]);
+    k.add([
+      k.rect(540, 66, { radius: 8 }),
+      k.pos(24, 88),
+      k.color(9, 13, 26),
+      k.opacity(0.9),
+      k.fixed()
+    ]);
+    k.add([
+      k.rect(14, 14, { radius: 2 }),
+      k.pos(46, 146),
+      k.rotate(45),
+      k.color(77, 255, 240),
+      k.opacity(0.5),
       k.fixed()
     ]);
     const messageText = k.add([
       k.text(defaultMessage, { size: 18, width: 520 }),
-      k.pos(30, 102),
+      k.pos(34, 106),
       k.color(232, 232, 245),
       k.fixed()
     ]);
@@ -162,16 +186,22 @@ export function startGame(container: HTMLElement) {
       }
     };
 
+    const randomMessage = () => messages[Math.floor(Math.random() * messages.length)];
+
+    const showMessage = (text: string, seconds = 1) => {
+      messageText.text = text;
+      messageUntil = k.time() + seconds;
+    };
+
     const handleMiss = () => {
-      messageText.text = "Mesaj: Iskala! Kedi sadece uzaktan bakti.";
-      missMessageUntil = k.time() + 1;
+      showMessage("Iskala. Kedi ciddiye bile almadi.", 1);
     };
 
     const handleHit = () => {
       score += 1;
       scoreText.text = `Skor: ${score}`;
       scorePopTime = k.time() + 0.25;
-      messageText.text = "Mesaj: +1! Kedi utanc kacisina gecti.";
+      showMessage(randomMessage(), 1);
       runCatEscape();
     };
 
@@ -242,8 +272,8 @@ export function startGame(container: HTMLElement) {
         timerText.pos = timerBasePos.clone();
       }
 
-      if (missMessageUntil > 0 && k.time() > missMessageUntil) {
-        missMessageUntil = 0;
+      if (messageUntil > 0 && k.time() > messageUntil) {
+        messageUntil = 0;
         if (!dashActive) {
           messageText.text = defaultMessage;
         }
