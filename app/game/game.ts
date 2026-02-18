@@ -441,7 +441,7 @@ export function startGame(container: HTMLElement) {
     ]);
 
     k.add([
-      k.text("Bu oyun D\u00fcnya Kedi G\u00fcn\u00fc i\u00e7in yap\u0131ld\u0131.\nVe evet, biri biraz u\u011fra\u015ft\u0131.", { size: 20, align: "center", width: 760 }),
+      k.text("Bu oyun D\u00fcnya Kedi G\u00fcn\u00fc i\u00e7in yap\u0131ld\u0131.", { size: 20, align: "center", width: 760 }),
       k.pos(GAME_WIDTH / 2, 345),
       k.anchor("center"),
       k.color(232, 232, 245)
